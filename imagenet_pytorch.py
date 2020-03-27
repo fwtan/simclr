@@ -162,7 +162,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 loc = 'cuda:{}'.format(args.gpu)
                 checkpoint = torch.load(args.resume, map_location=loc)
             model.load_state_dict(checkpoint)
-            print("=> loaded checkpoint '{}' (epoch {})".format(args.resume, checkpoint['epoch']))
+            print("=> loaded checkpoint '{}'".format(args.resume))
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
 
