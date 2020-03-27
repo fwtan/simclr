@@ -17,7 +17,7 @@ import tensorflow_hub as hub
 from pprint import pprint
 import torch, cv2
 import torch.nn as nn
-from torchvision.models import resnet50
+from resnet_pytorch import resnet50
 import numpy as np
 import os.path as osp
 
@@ -74,46 +74,46 @@ flags.DEFINE_boolean('use_blur', True, 'Whether or not to use Gaussian blur for 
 def load_conv(pth_module, tf_vars, tf_name):
     src = pth_module.weight
     tgt = tf_vars[os.path.join(tf_name, 'kernel')].transpose((3,2,0,1))
-    src.data.copy_(torch.from_numpy(tgt).float())
+    src.data.copy_(torch.from_numpy(tgt).double())
     if pth_module.bias is not None:
         src = pth_module.bias
         tgt = tf_vars[os.path.join(tf_name, 'bias')]
-        src.data.copy_(torch.from_numpy(tgt).float())
+        src.data.copy_(torch.from_numpy(tgt).double())
     # print(src.shape, tgt.shape)
     
 
 def load_bn(pth_module, tf_vars, tf_name):
     src = pth_module.running_mean
     tgt = tf_vars[os.path.join(tf_name, 'moving_mean')]
-    src.data.copy_(torch.from_numpy(tgt).float())
+    src.data.copy_(torch.from_numpy(tgt).double())
     src = pth_module.running_var
     tgt = tf_vars[os.path.join(tf_name, 'moving_variance')]
-    src.data.copy_(torch.from_numpy(tgt).float())
+    src.data.copy_(torch.from_numpy(tgt).double())
     src = pth_module.weight
     tgt = tf_vars[os.path.join(tf_name, 'gamma')]
-    src.data.copy_(torch.from_numpy(tgt).float())
+    src.data.copy_(torch.from_numpy(tgt).double())
     src = pth_module.bias
     tgt = tf_vars[os.path.join(tf_name, 'beta')]
-    src.data.copy_(torch.from_numpy(tgt).float())
+    src.data.copy_(torch.from_numpy(tgt).double())
     # print(src.shape, tgt.shape)
 
 
 def load_fc(pth_module, tf_vars, tf_name):
     src = pth_module.weight
     tgt = tf_vars[os.path.join(tf_name, 'kernel')]
-    src.data.copy_(torch.from_numpy(tgt.transpose()).float())
+    src.data.copy_(torch.from_numpy(tgt.transpose()).double())
     if pth_module.bias is not None:
         src = pth_module.bias
         tgt = tf_vars[os.path.join(tf_name, 'bias')]
-        src.data.copy_(torch.from_numpy(tgt).float())
+        src.data.copy_(torch.from_numpy(tgt).double())
 
 
 def build_model_fn(model, num_classes, num_train_examples):
     def model_fn(features, labels, mode, params=None):
         with tf.variable_scope('base_model'):
             hiddens = model(features, is_training=False)
-        logits_sup = model_util.supervised_head(hiddens, num_classes, False)
-        return tf.estimator.tpu.TPUEstimatorSpec(mode=mode, predictions=logits_sup)
+        hiddens = model_util.supervised_head(hiddens, num_classes, False)
+        return tf.estimator.tpu.TPUEstimatorSpec(mode=mode, predictions=hiddens)
     return model_fn
 
 
@@ -199,8 +199,12 @@ def main(argv):
 
 
     for item in estimator.predict(input_fn=_input_fn, checkpoint_path=ckpt_path):
+        print(np.amax(item), np.amax(pth_y))
+        # max_absolute_diff = np.amax(np.abs(item - pth_y.transpose(1,2,0)))
+
         max_absolute_diff = np.amax(np.abs(item - pth_y))
-        print('item', item.shape, max_absolute_diff)
+        print('item', item.shape, max_absolute_diff, np.argmax(item), np.argmax(item) - np.argmax(pth_y))
+        print('------')
 
 
 if __name__ == '__main__':
